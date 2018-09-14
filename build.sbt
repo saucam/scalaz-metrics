@@ -32,7 +32,22 @@ lazy val root =
 
 libraryDependencies ++= Seq(
   "org.scalaz" %% "scalaz-core" % "7.2.25",
-  "org.scalaz" %% "scalaz-zio" % "0.1-SNAPSHOT"
+  "org.scalaz" %% "scalaz-zio"  % "0.2.7"
 )
 
+libraryDependencies ++= Seq(
+  "io.dropwizard.metrics" % "metrics-core"         % "4.0.1",
+  "io.dropwizard.metrics" % "metrics-healthchecks" % "4.0.1"
+)
+
+libraryDependencies += "org.scalaz" %% "testz-core"   % "0.0.5"
+libraryDependencies += "org.scalaz" %% "testz-stdlib" % "0.0.5"
+
 resolvers += Resolver.sonatypeRepo("snapshots")
+
+resolvers += Resolver.sonatypeRepo("releases")
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7")
+
+// TODO: enforce scalazzi dialect through the scalaz-plugin
+//addCompilerPlugin("org.scalaz" % "scalaz-plugin_2.12.4" % "0.0.3")
