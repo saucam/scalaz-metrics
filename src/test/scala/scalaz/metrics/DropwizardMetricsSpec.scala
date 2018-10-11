@@ -10,8 +10,6 @@ object DropwizardMetricsSpec extends App {
 
   val dropwizardMetrics = new DropwizardMetrics
 
-  val f = IO.point(println("Hola"))
-
   def performTests: IO[IOException, Unit] =
     for {
       f <- dropwizardMetrics.counter(Label(Array("test", "counter")))
@@ -40,7 +38,7 @@ object DropwizardMetricsSpec extends App {
       })
       .map(ExitStatus.ExitNow(_))
 
-  def printMetrics() = {
+  def printMetrics(): Unit = {
     println(
       dropwizardMetrics.registry
         .getCounters()
