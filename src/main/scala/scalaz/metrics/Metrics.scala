@@ -2,13 +2,14 @@ package scalaz.metrics
 
 //import javax.management.openmbean.OpenType
 import scalaz.{ Semigroup, Show }
+import scala.concurrent.duration.TimeUnit
 
 sealed trait Reservoir[+A]
 
 object Reservoir {
-  case object Uniform                       extends Reservoir[Nothing]
-  case class Bounded[A](lower: A, upper: A) extends Reservoir[A]
-  case object ExponentiallyDecaying         extends Reservoir[Nothing]
+  case object Uniform                                 extends Reservoir[Nothing]
+  case class Bounded[A](window: Long, unit: TimeUnit) extends Reservoir[A]
+  case object ExponentiallyDecaying                   extends Reservoir[Nothing]
 }
 
 trait Timer[F[_], A] {
@@ -53,25 +54,3 @@ trait Metrics[F[_], Ctx] {
   // TODO is this still needed is L is not fixed to the Metrics trait?
   //def contramap[L0, L: Show](f: L0 => L): Metrics[F, Ctx]
 }
-
-/* object Main {
-  // Example usage:
-  for {
-    requestCount  <- counter(nel("server", "requests", "failed"))
-    _             <- requestCount(1)
-
-    _             <- gague("evictions-count")(cache.getEvictionsCount)
-
-    requestLength <- histogram[Double]("request-length")
-    _             <- requestLength(requestLength)
-
-    requestTiming <- timer("request-timing")
-    _             <- requestTime(doRequest(x, y, z))
-  }
-
-
-  // Syntax extensions
-  io.counter(label)
-  io.timed(label)
-}
- */
