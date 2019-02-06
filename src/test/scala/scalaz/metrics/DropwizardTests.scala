@@ -16,33 +16,35 @@ object DropwizardTests extends RTS {
     b <- f(2)
   } yield b
 
-  val testGauge: (() => Long) => IO[IOException, Unit] = (f: () => Long) =>
+  val testGauge: (Option[Unit] => Long) => IO[IOException, Unit] = (f: Option[Unit] => Long) =>
     for {
-      a <- dropwizardMetrics.gauge[Long, String](Label(Array("test", "gauge")))(IO.sync(f))
-    } yield a
+      a <- dropwizardMetrics.gauge[Unit, Long, String](Label(Array("test", "gauge")))(f)
+      r <- a(None)
+    } yield r
 
-  val testTimer: IO[IOException, List[Long]] = for {
-    t <- dropwizardMetrics.timer(Label(Array("test", "timer")))
-    l <- IO.traverse(
+  val testTimer: IO[IOException, List[Double]] = for {
+    t  <- dropwizardMetrics.timer(Label(Array("test", "timer")))
+    t1 = t.start
+    l <- IO.foreach(
           List(
             Thread.sleep(1000L),
             Thread.sleep(1400L),
             Thread.sleep(1200L)
           )
-        )(a => t.stop(t.apply))
+        )(a => t.stop(t1))
   } yield l
 
   val testHistogram: IO[IOException, Unit] = {
     import scala.math.Numeric.IntIsIntegral
     for {
       h <- dropwizardMetrics.histogram(Label(Array("test", "histogram")))
-      _ <- IO.traverse(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
+      _ <- IO.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
     } yield ()
   }
 
   val testMeter: IO[IOException, Unit] = for {
     m <- dropwizardMetrics.meter(Label(Array("test", "meter")))
-    _ <- IO.traverse(1 to 5)(i => IO.now(m(1)))
+    _ <- IO.foreach(1 to 5)(i => IO.succeed(m(1)))
   } yield ()
 
   def tests[T](harness: Harness[T]): T = {
@@ -58,7 +60,7 @@ object DropwizardTests extends RTS {
         assert(counter == 3)
       },
       test("gauge returns latest value") { () =>
-        val tester: () => Long = () => System.nanoTime()
+        val tester: Option[Unit] => Long = (op: Option[Unit]) => System.nanoTime()
         unsafeRun(testGauge(tester))
         val a1 = dropwizardMetrics.registry
           .getGauges()
@@ -83,7 +85,7 @@ object DropwizardTests extends RTS {
 
         assert(counter == 3)
       },
-      test("Timer mean rate within bounds") { () =>
+      test("Timer mean rate for 6 calls within bounds") { () =>
         unsafeRun(testTimer)
         val meanRate = dropwizardMetrics.registry
           .getTimers()

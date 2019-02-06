@@ -10,26 +10,28 @@ object DropwizardMetricsSpec extends App {
 
   val dropwizardMetrics = new DropwizardMetrics
 
-  val tester: () => Long = () => System.nanoTime()
+  val tester: Option[Unit] => Long = (op: Option[Unit]) => System.nanoTime()
 
   def performTests: IO[IOException, Unit] =
     for {
-      f <- dropwizardMetrics.counter(Label(Array("test", "counter")))
-      _ <- f(1)
-      _ <- f(2)
-      _ <- dropwizardMetrics.gauge(Label(Array("test", "gauge")))(IO.sync(tester))
-      t <- dropwizardMetrics.timer(Label(Array("test", "timer")))
-      l <- IO.traverse(
+      f  <- dropwizardMetrics.counter(Label(Array("test", "counter")))
+      _  <- f(1)
+      _  <- f(2)
+      g  <- dropwizardMetrics.gauge(Label(Array("test", "gauge")))(tester)
+      _  <- g(None)
+      t  <- dropwizardMetrics.timer(Label(Array("test", "timer")))
+      t1 = t.start
+      l <- IO.foreach(
             List(
               Thread.sleep(1000L),
               Thread.sleep(1400L),
               Thread.sleep(1200L)
             )
-          )(a => t.stop(t.apply))
+          )(a => t.stop(t1))
       h <- dropwizardMetrics.histogram(Label(Array("test", "histogram")))
-      _ <- IO.traverse(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
+      _ <- IO.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
       m <- dropwizardMetrics.meter(Label(Array("test", "meter")))
-      _ <- IO.traverse(1 to 5)(i => IO.now(m(1)))
+      _ <- IO.foreach(1 to 5)(i => IO.succeed(m(1)))
     } yield { println(s"time $l ns"); () }
 
   def run(args: List[String]): IO[Nothing, ExitStatus] =
