@@ -1,26 +1,24 @@
 package scalaz.metrics
 
-import java.io.IOException
-
 import com.codahale.metrics.MetricRegistry.MetricSupplier
 import com.codahale.metrics.Timer.Context
-import com.codahale.metrics.{ Reservoir => DWReservoir, _ }
+import com.codahale.metrics.{Reservoir => DWReservoir, _}
 import scalaz.metrics.Label._
 import scalaz.metrics.Reservoir._
-import scalaz.zio.IO
-import scalaz.{ Semigroup, Show }
+import scalaz.zio.Task
+import scalaz.{Semigroup, Show}
 
-class DropwizardMetrics extends Metrics[IO[IOException, ?], Context] {
+class DropwizardMetrics extends Metrics[Task[?], Context] {
 
   val registry: MetricRegistry = new MetricRegistry()
 
-  type MetriczIO[A] = IO[IOException, A]
+  type MetriczIO[A] = Task[A]
 
-  override def counter[L: Show](label: Label[L]): MetriczIO[Long => IO[IOException, Unit]] = {
+  override def counter[L: Show](label: Label[L]): MetriczIO[Long => Task[Unit]] = {
     val lbl = Show[Label[L]].shows(label)
-    IO.sync(
+    Task.effect(
       (l: Long) => {
-        IO.succeedLazy(registry.counter(lbl).inc(l))
+        Task.succeedLazy(registry.counter(lbl).inc(l))
       }
     )
   }
@@ -29,11 +27,11 @@ class DropwizardMetrics extends Metrics[IO[IOException, ?], Context] {
     label: Label[L]
   )(
     f: Option[A] => B
-  ): MetriczIO[Option[A] => IO[IOException, Unit]] = {
+  ): MetriczIO[Option[A] => Task[Unit]] = {
     val lbl = Show[Label[L]].shows(label)
-    IO.sync(
+    Task.effect(
       (op: Option[A]) =>
-        IO.succeedLazy({
+        Task.succeedLazy({
           registry.register(lbl, new Gauge[B]() {
             override def getValue: B = f(op)
           })
@@ -44,14 +42,14 @@ class DropwizardMetrics extends Metrics[IO[IOException, ?], Context] {
 
   class IOTimer(val ctx: Context) extends Timer[MetriczIO[?], Context] {
     override val a: Context                = ctx
-    override def start: MetriczIO[Context] = IO.succeed(a)
+    override def start: MetriczIO[Context] = Task.succeed(a)
     override def stop(io: MetriczIO[Context]): MetriczIO[Double] =
       io.map(c => c.stop().toDouble)
   }
 
-  override def timer[L: Show](label: Label[L]): IO[IOException, Timer[MetriczIO[?], Context]] = {
+  override def timer[L: Show](label: Label[L]): Task[Timer[MetriczIO[?], Context]] = {
     val lbl = Show[Label[L]].shows(label)
-    val iot = IO.succeed(registry.timer(lbl))
+    val iot = Task.succeed(registry.timer(lbl))
     val r   = iot.map(t => new IOTimer(t.time()))
     r
   }
@@ -73,12 +71,12 @@ class DropwizardMetrics extends Metrics[IO[IOException, ?], Context] {
       override def newMetric(): Histogram = new Histogram(reservoir)
     }
 
-    IO.sync((a: A) => IO.sync(registry.histogram(lbl, supplier).update(num.toLong(a))))
+    Task.effect((a: A) => Task.effect(registry.histogram(lbl, supplier).update(num.toLong(a))))
   }
 
   override def meter[L: Show](label: Label[L]): MetriczIO[Double => MetriczIO[Unit]] = {
     val lbl = Show[Label[L]].shows(label)
-    IO.sync(d => IO.succeed(registry.meter(lbl)).map(m => m.mark(d.toLong)))
+    Task.effect(d => Task.succeed(registry.meter(lbl)).map(m => m.mark(d.toLong)))
   }
 }
 

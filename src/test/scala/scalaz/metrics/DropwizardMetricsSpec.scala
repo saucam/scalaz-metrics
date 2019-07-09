@@ -1,8 +1,7 @@
 package scalaz.metrics
-import java.io.IOException
 
 import scalaz.Scalaz._
-import scalaz.zio.{ App, IO }
+import scalaz.zio.{App, Task, ZIO}
 
 import scala.math.Numeric.IntIsIntegral
 
@@ -12,7 +11,7 @@ object DropwizardMetricsSpec extends App {
 
   val tester: Option[Unit] => Long = (op: Option[Unit]) => System.nanoTime()
 
-  def performTests: IO[IOException, Unit] =
+  def performTests: Task[Unit] =
     for {
       f  <- dropwizardMetrics.counter(Label(Array("test", "counter")))
       _  <- f(1)
@@ -21,7 +20,7 @@ object DropwizardMetricsSpec extends App {
       _  <- g(None)
       t  <- dropwizardMetrics.timer(Label(Array("test", "timer")))
       t1 = t.start
-      l <- IO.foreach(
+      l <- Task.foreach(
             List(
               Thread.sleep(1000L),
               Thread.sleep(1400L),
@@ -29,18 +28,17 @@ object DropwizardMetricsSpec extends App {
             )
           )(a => t.stop(t1))
       h <- dropwizardMetrics.histogram(Label(Array("test", "histogram")))
-      _ <- IO.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
+      _ <- Task.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.unit)
       m <- dropwizardMetrics.meter(Label(Array("test", "meter")))
-      _ <- IO.foreach(1 to 5)(i => IO.succeed(m(1)))
+      _ <- Task.foreach(1 to 5)(i => Task.succeed(m(1)))
     } yield { println(s"time $l ns"); () }
 
-  def run(args: List[String]): IO[Nothing, ExitStatus] =
-    performTests.attempt
+  def run(args: List[String]): ZIO[Environment, Nothing, Int] =
+    performTests.run
       .map(ei => {
         printMetrics()
         ei.fold(_ => 1, _ => 0)
       })
-      .map(ExitStatus.ExitNow(_))
 
   def printMetrics(): Unit = {
     println(

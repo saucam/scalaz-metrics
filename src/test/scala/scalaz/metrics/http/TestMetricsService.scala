@@ -1,25 +1,22 @@
 package scalaz.metrics.http
 
-import java.io.IOException
-
 import org.http4s.dsl.impl.Root
 import org.http4s.dsl.io._
-import org.http4s.{ HttpRoutes, Response }
+import org.http4s.{HttpRoutes, Response}
 import scalaz.Scalaz._
-import scalaz.metrics.{ Label, Metrics }
-import scalaz.zio.{ IO, RTS }
-import scalaz.zio.interop.Task
+import scalaz.metrics.{Label, Metrics}
+import scalaz.zio.{DefaultRuntime, Task}
 import scalaz.zio.interop.catz._
 
 import scala.math.Numeric.IntIsIntegral
 
-object TestMetricsService extends RTS {
+object TestMetricsService extends DefaultRuntime {
   println("Serving")
 
   val s: Stream[Int]               = Stream.from(1)
   val tester: Option[Unit] => Long = (op: Option[Unit]) => s.takeWhile(_ < 10).head.toLong
 
-  def performTests[Ctx](metrics: Metrics[IO[IOException, ?], Ctx]): IO[IOException, String] =
+  def performTests[Ctx](metrics: Metrics[Task[?], Ctx]): Task[String] =
     for {
       f  <- metrics.counter(Label(Array("test", "counter"), "_"))
       _  <- f(1)
@@ -27,7 +24,7 @@ object TestMetricsService extends RTS {
       _  <- metrics.gauge(Label(Array("test", "gauge"), "_"))(tester)
       t  <- metrics.timer(Label(Array("test", "timer"), "_"))
       t1 = t.start
-      l <- IO.foreach(
+      l <- Task.foreach(
             List(
               Thread.sleep(1000L),
               Thread.sleep(1400L),
@@ -35,16 +32,16 @@ object TestMetricsService extends RTS {
             )
           )(a => t.stop(t1))
       h <- metrics.histogram(Label(Array("test", "histogram"), "_"))
-      _ <- IO.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.void)
+      _ <- Task.foreach(List(h(10), h(25), h(50), h(57), h(19)))(_.unit)
       m <- metrics.meter(Label(Array("test", "meter"), "_"))
-      _ <- IO.foreach(1 to 5)(i => IO.succeed(m(1)))
+      _ <- Task.foreach(1 to 5)(i => Task.succeed(m(1)))
     } yield { s"time $l ns" }
 
   def service[Ctx] =
-    (metrics: Metrics[IO[IOException, ?], Ctx]) =>
+    (metrics: Metrics[Task[?], Ctx]) =>
       HttpRoutes.of[Task] {
         case GET -> Root =>
-          val m = performTests(metrics).attempt
+          val m = performTests(metrics).run
             .map(ei => {
               ei.fold(_ => "failure encountered", s => s)
             })
